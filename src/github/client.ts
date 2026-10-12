@@ -45,10 +45,16 @@ async function githubFetch(
   try {
     res = await fetch(url, { ...init, headers })
   } catch (networkErr) {
-    // Likely CORS or offline — switch to Vite proxy once and retry
-    if (!useProxy) {
+    // Vite /api/github proxy exists only in `vite dev`. Never flip permanently
+    // on static hosts (GitHub Pages) — that path 404s and poisoned later calls.
+    if (!useProxy && import.meta.env.DEV) {
       useProxy = true
-      return githubFetch(settings, path, init)
+      try {
+        return await githubFetch(settings, path, init)
+      } catch {
+        useProxy = false
+        throw networkErr
+      }
     }
     throw networkErr
   }
@@ -110,7 +116,14 @@ export async function listDiagrams(
 
   const res = await githubFetch(settings, path)
   if (res.status === 404) {
-    // folder does not exist yet — treat as empty
+    // Missing diagrams folder (or empty never-created path) is not an error —
+    // first save creates the path via Contents API. Only surface 404 when the
+    // repo itself is missing / inaccessible.
+    const repoRes = await githubFetch(settings, `/repos/${owner}/${name}`)
+    if (repoRes.status === 404) {
+      await parseError(repoRes)
+    }
+    if (!repoRes.ok) await parseError(repoRes)
     return []
   }
   if (!res.ok) await parseError(res)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { deleteFile, listDiagrams } from '../github/client'
 import {
   DEFAULT_BRANCH,
@@ -20,34 +20,60 @@ export function OpenModal({ open, settings, onClose, onOpen }: Props) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<GithubContentItem | null>(
+    null,
+  )
+  const loadGen = useRef(0)
 
   const load = async () => {
+    const gen = ++loadGen.current
     setBusy(true)
     setErr(null)
     try {
       const list = await listDiagrams(settings)
+      if (gen !== loadGen.current) return
       setItems(list)
+      setErr(null)
     } catch (e) {
+      if (gen !== loadGen.current) return
       setErr(friendlyGithubError(e))
       setItems([])
     } finally {
-      setBusy(false)
+      if (gen === loadGen.current) setBusy(false)
     }
   }
 
   useEffect(() => {
-    if (open) void load()
+    if (open) {
+      setPendingDelete(null)
+      void load()
+    } else {
+      // Invalidate in-flight loads when the modal closes
+      loadGen.current += 1
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   if (!open) return null
 
-  const handleDelete = async (item: GithubContentItem) => {
-    if (!confirm(`确定删除 GitHub 上的文件？\n${item.path}`)) return
+  const askDelete = (item: GithubContentItem) => {
+    setPendingDelete(item)
+  }
+
+  const cancelDelete = () => {
+    if (deleting) return
+    setPendingDelete(null)
+  }
+
+  const confirmDelete = async () => {
+    const item = pendingDelete
+    if (!item) return
     setDeleting(item.path)
     setErr(null)
     try {
       await deleteFile(settings, item.path, item.sha, `Delete diagram ${item.name}`)
+      setPendingDelete(null)
+      // load() clears err on success and refreshes the file list
       await load()
     } catch (e) {
       setErr(friendlyGithubError(e))
@@ -94,7 +120,7 @@ export function OpenModal({ open, settings, onClose, onOpen }: Props) {
                   type="button"
                   className="btn danger small"
                   disabled={deleting === item.path}
-                  onClick={() => void handleDelete(item)}
+                  onClick={() => askDelete(item)}
                 >
                   {deleting === item.path ? '…' : '删除'}
                 </button>
@@ -113,6 +139,62 @@ export function OpenModal({ open, settings, onClose, onOpen }: Props) {
           </button>
         </footer>
       </div>
+
+      {pendingDelete && (
+        <div
+          className="modal-backdrop confirm-backdrop"
+          onClick={(e) => {
+            e.stopPropagation()
+            cancelDelete()
+          }}
+          role="presentation"
+        >
+          <div
+            className="modal narrow confirm-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="modal-header">
+              <h2 id="delete-confirm-title">确认删除</h2>
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={cancelDelete}
+                aria-label="关闭"
+                disabled={Boolean(deleting)}
+              >
+                ×
+              </button>
+            </header>
+            <p className="hint">
+              确定删除 GitHub 上的文件？
+              <br />
+              <code>{pendingDelete.path}</code>
+            </p>
+            <footer className="modal-footer">
+              <div className="spacer" />
+              <button
+                type="button"
+                className="btn"
+                onClick={cancelDelete}
+                disabled={Boolean(deleting)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                onClick={() => void confirmDelete()}
+                disabled={Boolean(deleting)}
+              >
+                {deleting ? '删除中…' : '删除'}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

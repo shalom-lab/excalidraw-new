@@ -379,3 +379,12 @@
 .canvas .excalidraw {
   height: 100%;
 }
+
+.confirm-backdrop {
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.confirm-modal {
+  z-index: 1101;
+}
