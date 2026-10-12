@@ -338,6 +338,8 @@ export default function App() {
       <header className="toolbar">
         <div className="brand">
           <strong>Excalidraw</strong>
+        </div>
+        <div className="toolbar-title">
           {editingTitle ? (
             <input
               ref={titleInputRef}
