@@ -10,6 +10,12 @@ import { ImportLibraryModal } from './components/ImportLibraryModal'
 import { OpenModal } from './components/OpenModal'
 import { SaveModal } from './components/SaveModal'
 import { SettingsModal } from './components/SettingsModal'
+import {
+  clearDraft,
+  draftHasContent,
+  loadDraft,
+  saveDraft,
+} from './draft/storage'
 import { diagramPath, getFile, putFile } from './github/client'
 import { isConfigured, loadSettings } from './github/storage'
 import {
@@ -27,6 +33,9 @@ import {
 } from './library/fetchLibrary'
 import { libraryAdapter } from './library/storage'
 import './App.css'
+
+/** Debounce for local auto-draft writes (ms). */
+const DRAFT_DEBOUNCE_MS = 600
 
 interface DiagramDoc {
   type: 'excalidraw'
@@ -79,12 +88,27 @@ export default function App() {
   const [titleDraft, setTitleDraft] = useState('')
   const titleInputRef = useRef<HTMLInputElement | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const metaRef = useRef({
+    path: null as string | null,
+    name: 'untitled',
+    sha: null as string | null,
+  })
 
   // Force remount when loading a new scene so initialData applies cleanly
   const [sceneKey, setSceneKey] = useState(0)
   const [initialData, setInitialData] = useState<DiagramDoc>(() => emptyDoc())
+  const [bootDone, setBootDone] = useState(false)
 
   const configured = useMemo(() => isConfigured(settings), [settings])
+
+  useEffect(() => {
+    metaRef.current = {
+      path: currentPath,
+      name: currentName,
+      sha: currentSha,
+    }
+  }, [currentPath, currentName, currentSha])
 
   const showToast = useCallback((message: string, ms = 2800) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
@@ -95,11 +119,57 @@ export default function App() {
     }, ms)
   }, [])
 
+  const clearLocalDraft = useCallback(() => {
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current)
+      draftTimerRef.current = null
+    }
+    void clearDraft()
+  }, [])
+
   useEffect(() => {
     return () => {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
     }
   }, [])
+
+  // Restore local auto-draft before mounting the canvas (refresh/close safety net).
+  // Does not replace GitHub save — only a browser-local backup.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const draft = await loadDraft()
+        if (cancelled) return
+        if (draftHasContent(draft) && draft) {
+          setInitialData({
+            type: 'excalidraw',
+            version: 2,
+            source: 'excalidraw-byok',
+            elements: draft.elements ?? [],
+            appState: {
+              viewBackgroundColor: '#ffffff',
+              ...(draft.appState ?? {}),
+              collaborators: undefined,
+            },
+            files: draft.files ?? {},
+          })
+          setCurrentPath(draft.path)
+          setCurrentSha(draft.sha)
+          setCurrentName(draft.name || 'untitled')
+          showToast('已从本地草稿恢复')
+        }
+      } catch {
+        // ignore corrupt draft
+      } finally {
+        if (!cancelled) setBootDone(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [showToast])
 
   useEffect(() => {
     if (editingTitle) {
@@ -174,6 +244,29 @@ export default function App() {
     setSceneKey((k) => k + 1)
   }, [])
 
+  const handleSceneChange = useCallback(
+    (
+      elements: readonly unknown[],
+      appState: Record<string, unknown>,
+      files: BinaryFiles,
+    ) => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+      draftTimerRef.current = setTimeout(() => {
+        draftTimerRef.current = null
+        const meta = metaRef.current
+        void saveDraft({
+          path: meta.path,
+          name: meta.name,
+          sha: meta.sha,
+          elements: elements as unknown[],
+          appState: stripAppState(appState),
+          files,
+        })
+      }, DRAFT_DEBOUNCE_MS)
+    },
+    [],
+  )
+
   const handleNew = () => {
     if (
       currentPath &&
@@ -181,6 +274,7 @@ export default function App() {
     ) {
       return
     }
+    clearLocalDraft()
     applyScene(emptyDoc(), null, null)
     setCurrentName('untitled')
     setError(null)
@@ -195,6 +289,8 @@ export default function App() {
       const { sha, text } = await getFile(settings, item.path)
       const doc = JSON.parse(text) as DiagramDoc
       if (!doc.elements) throw new Error('文件不是有效的 Excalidraw JSON')
+      // Opening a GitHub file replaces the canvas; drop the previous local draft.
+      clearLocalDraft()
       applyScene(doc, item.path, sha)
       showToast(`已打开 ${item.path}`)
     } catch (e) {
@@ -235,6 +331,8 @@ export default function App() {
       setCurrentSha(result.sha)
       const base = result.path.split('/').pop() || filenameOrPath
       setCurrentName(base.replace(/\.excalidraw\.json$/i, '').replace(/\.excalidraw$/i, ''))
+      // GitHub now has the canonical copy — clear browser draft.
+      clearLocalDraft()
       showToast(`已保存 ${result.path}`)
       setSaveAsOpen(false)
     } catch (e) {
@@ -262,6 +360,7 @@ export default function App() {
               .replace(/\.excalidraw\.json$/i, '')
               .replace(/\.excalidraw$/i, ''),
           )
+          clearLocalDraft()
           showToast(`已覆盖保存 ${result.path}`)
           setSaveAsOpen(false)
           setError(null)
@@ -451,18 +550,31 @@ export default function App() {
       )}
 
       <div className="canvas">
-        <Excalidraw
-          key={sceneKey}
-          excalidrawAPI={setApi}
-          initialData={{
-            elements: initialData.elements as never,
-            appState: initialData.appState as never,
-            files: initialData.files,
-            scrollToContent: true,
-          }}
-          langCode="zh-CN"
-          libraryReturnUrl={libraryReturnUrl}
-        />
+        {bootDone ? (
+          <Excalidraw
+            key={sceneKey}
+            excalidrawAPI={setApi}
+            initialData={{
+              elements: initialData.elements as never,
+              appState: initialData.appState as never,
+              files: initialData.files,
+              scrollToContent: true,
+            }}
+            onChange={(elements, appState, files) => {
+              handleSceneChange(
+                elements,
+                appState as unknown as Record<string, unknown>,
+                files,
+              )
+            }}
+            langCode="zh-CN"
+            libraryReturnUrl={libraryReturnUrl}
+          />
+        ) : (
+          <div className="boot-placeholder" aria-busy="true">
+            加载中…
+          </div>
+        )}
       </div>
 
       <SettingsModal

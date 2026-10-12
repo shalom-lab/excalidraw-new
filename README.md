@@ -70,6 +70,7 @@ npm run preview
 - **删除**：在打开列表里删除仓库中的文件
 - **导入官方库**：从 [libraries.excalidraw.com](https://libraries.excalidraw.com) 一键安装（见下），无需先下载 `.excalidrawlib`，也**不需要** GitHub Token
 - **错误提示**：401 / 403 / 404 / 409 / 422 中文说明
+- **本地自动草稿**：画布变更防抖写入浏览器 `localStorage`（过大时回退 IndexedDB）；刷新/关闭不丢未保存内容；成功保存到 GitHub 或「新建」时清除。启动若有草稿会恢复并提示「已从本地草稿恢复」。**不替代** GitHub 保存。
 
 画布在未配置 GitHub 时也可正常使用；只有打开/保存需要 PAT。图表默认写到分支 `main`、目录 `diagrams/`（非 BYOK 键，应用内默认）。
 
@@ -105,6 +106,8 @@ excalidraw-byok/
 │   │   ├── OpenModal.tsx       # 列出/打开/删除
 │   │   ├── SaveModal.tsx       # 另存为文件名
 │   │   └── ImportLibraryModal.tsx  # 打开官方库 / 粘贴 URL 安装
+│   ├── draft/
+│   │   └── storage.ts          # 本地自动草稿（localStorage / IndexedDB）
 │   ├── library/
 │   │   ├── fetchLibrary.ts     # 下载 .excalidrawlib + 代理回退 + browse URL
 │   │   └── storage.ts          # useHandleLibrary localStorage adapter

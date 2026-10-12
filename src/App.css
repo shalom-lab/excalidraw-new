@@ -147,6 +147,15 @@
   position: relative;
 }
 
+.boot-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #78716c;
+  font-size: 14px;
+}
+
 .btn {
   appearance: none;
   border: 1px solid #44403c;
