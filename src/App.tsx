@@ -300,7 +300,7 @@ export default function App() {
     <div className="app">
       <header className="toolbar">
         <div className="brand">
-          <strong>Excalidraw BYOK</strong>
+          <strong>Excalidraw</strong>
           <span className="file-badge" title={currentPath ?? '未保存到 GitHub'}>
             {currentPath ? currentPath : `${currentName}（本地）`}
           </span>

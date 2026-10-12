@@ -108,7 +108,7 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <header className="modal-header">
-          <h2>GitHub BYOK 设置</h2>
+          <h2>GitHub 设置</h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭">
             ×
           </button>
