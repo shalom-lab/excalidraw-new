@@ -1,40 +1,50 @@
 import { DEFAULT_SETTINGS, type GithubSettings } from './types'
 
-const STORAGE_KEY = 'excalidraw-byok-github-settings'
+/** Flat, hyphenated BYOK keys — mandatory convention. */
+export const KEY_TOKEN = 'gh-excalidraw-token'
+export const KEY_REPO = 'gh-excalidraw-repo'
 
+/** Legacy JSON blob key — removed on load/save/clear. */
+const LEGACY_KEY = 'excalidraw-byok-github-settings'
+
+function removeLegacy(): void {
+  try {
+    localStorage.removeItem(LEGACY_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Silently read both keys from localStorage into settings shape.
+ * No modal interrupt — call on App start.
+ */
 export function loadSettings(): GithubSettings {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { ...DEFAULT_SETTINGS }
-    const parsed = JSON.parse(raw) as Partial<GithubSettings>
+    removeLegacy()
     return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      // never leave undefined fields
-      pat: parsed.pat ?? '',
-      owner: parsed.owner ?? '',
-      repo: parsed.repo ?? '',
-      branch: parsed.branch || 'main',
-      folder: parsed.folder || 'diagrams',
+      token: localStorage.getItem(KEY_TOKEN) ?? '',
+      repo: localStorage.getItem(KEY_REPO) ?? '',
     }
   } catch {
     return { ...DEFAULT_SETTINGS }
   }
 }
 
+/** save = setItem for each flat key (never a JSON blob of secrets). */
 export function saveSettings(settings: GithubSettings): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+  localStorage.setItem(KEY_TOKEN, settings.token.trim())
+  localStorage.setItem(KEY_REPO, settings.repo.trim())
+  removeLegacy()
 }
 
+/** clear = removeItem for both keys. */
 export function clearSettings(): void {
-  localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(KEY_TOKEN)
+  localStorage.removeItem(KEY_REPO)
+  removeLegacy()
 }
 
 export function isConfigured(settings: GithubSettings): boolean {
-  return Boolean(
-    settings.pat.trim() &&
-      settings.owner.trim() &&
-      settings.repo.trim() &&
-      settings.branch.trim(),
-  )
+  return Boolean(settings.token.trim() && settings.repo.trim().includes('/'))
 }

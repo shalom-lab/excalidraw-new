@@ -12,6 +12,7 @@ import { SettingsModal } from './components/SettingsModal'
 import { diagramPath, getFile, putFile } from './github/client'
 import { isConfigured, loadSettings } from './github/storage'
 import {
+  DEFAULT_FOLDER,
   friendlyGithubError,
   type GithubContentItem,
   type GithubSettings,
@@ -243,8 +244,15 @@ export default function App() {
           <button
             type="button"
             className="btn"
-            disabled={busy || !configured}
-            onClick={() => setOpenOpen(true)}
+            disabled={busy}
+            onClick={() => {
+              if (!configured) {
+                setSettingsOpen(true)
+                setError('请先配置 GitHub PAT 与仓库（Settings）')
+                return
+              }
+              setOpenOpen(true)
+            }}
             title={configured ? '从 GitHub 打开' : '请先配置 GitHub'}
           >
             打开
@@ -260,8 +268,15 @@ export default function App() {
           <button
             type="button"
             className="btn"
-            disabled={busy || !configured}
-            onClick={() => setSaveAsOpen(true)}
+            disabled={busy}
+            onClick={() => {
+              if (!configured) {
+                setSettingsOpen(true)
+                setError('请先配置 GitHub PAT 与仓库（Settings）')
+                return
+              }
+              setSaveAsOpen(true)
+            }}
           >
             另存为
           </button>
@@ -269,8 +284,9 @@ export default function App() {
             type="button"
             className="btn"
             onClick={() => setSettingsOpen(true)}
+            title={configured ? '已保存' : '未设置'}
           >
-            设置 {configured ? '✓' : ''}
+            设置 · {configured ? '已保存' : '未设置'}
           </button>
         </div>
       </header>
@@ -312,7 +328,7 @@ export default function App() {
           setSettings(s)
           setStatus(
             isConfigured(s)
-              ? `已配置 ${s.owner}/${s.repo}@${s.branch}`
+              ? `已配置 ${s.repo}`
               : '设置已更新（尚未完整配置）',
           )
         }}
@@ -328,7 +344,7 @@ export default function App() {
       <SaveModal
         open={saveAsOpen}
         defaultName={currentName || 'untitled'}
-        folder={settings.folder || 'diagrams'}
+        folder={DEFAULT_FOLDER}
         onClose={() => setSaveAsOpen(false)}
         onSave={(filename) => void doSave(filename, true)}
       />

@@ -1,17 +1,33 @@
 export interface GithubSettings {
-  pat: string
-  owner: string
+  /** PAT from localStorage key gh-excalidraw-token */
+  token: string
+  /** owner/name from localStorage key gh-excalidraw-repo */
   repo: string
-  branch: string
-  folder: string
 }
 
 export const DEFAULT_SETTINGS: GithubSettings = {
-  pat: '',
-  owner: '',
+  token: '',
   repo: '',
-  branch: 'main',
-  folder: 'diagrams',
+}
+
+/** Hardcoded defaults for Contents API (not BYOK keys). */
+export const DEFAULT_BRANCH = 'main'
+export const DEFAULT_FOLDER = 'diagrams'
+
+export interface ParsedRepo {
+  owner: string
+  name: string
+}
+
+/** Split `owner/name` only when calling GitHub API. */
+export function parseRepo(repo: string): ParsedRepo | null {
+  const trimmed = repo.trim()
+  const slash = trimmed.indexOf('/')
+  if (slash <= 0 || slash === trimmed.length - 1) return null
+  const owner = trimmed.slice(0, slash).trim()
+  const name = trimmed.slice(slash + 1).trim()
+  if (!owner || !name || name.includes('/')) return null
+  return { owner, name }
 }
 
 export interface GithubContentItem {
@@ -60,4 +76,12 @@ export function friendlyGithubError(err: unknown): string {
   }
   if (err instanceof Error) return err.message
   return String(err)
+}
+
+/** Mask token for status display — never show full secret. */
+export function maskToken(token: string): string {
+  const t = token.trim()
+  if (!t) return ''
+  if (t.length <= 4) return '••••'
+  return `••••${t.slice(-4)}`
 }

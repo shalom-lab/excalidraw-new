@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { deleteFile, listDiagrams } from '../github/client'
-import { friendlyGithubError, type GithubContentItem, type GithubSettings } from '../github/types'
+import {
+  DEFAULT_BRANCH,
+  DEFAULT_FOLDER,
+  friendlyGithubError,
+  type GithubContentItem,
+  type GithubSettings,
+} from '../github/types'
 
 interface Props {
   open: boolean
@@ -61,8 +67,8 @@ export function OpenModal({ open, settings, onClose, onOpen }: Props) {
         </header>
 
         <p className="hint">
-          仓库 <code>{settings.owner}/{settings.repo}</code> · 分支{' '}
-          <code>{settings.branch}</code> · 目录 <code>{settings.folder || '/'}</code>
+          仓库 <code>{settings.repo || '—'}</code> · 分支{' '}
+          <code>{DEFAULT_BRANCH}</code> · 目录 <code>{DEFAULT_FOLDER}</code>
         </p>
 
         {err && <div className="banner error">{err}</div>}

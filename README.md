@@ -13,7 +13,6 @@ A thin Vite + React host for `@excalidraw/excalidraw` with **Bring Your Own Key*
 - Deploy via GitHub Actions (`.github/workflows/deploy-pages.yml`) on push to `main`.
 - In the repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 
-
 ## 快速开始 / Run
 
 ```bash
@@ -31,12 +30,28 @@ npm run build
 npm run preview
 ```
 
-## BYOK 设置
+## BYOK 设置（localStorage）
+
+密钥与仓库用**扁平、带连字符**的两个键，**不是** JSON blob：
+
+| Key | Value |
+| --- | --- |
+| `gh-excalidraw-token` | GitHub PAT（BYOK） |
+| `gh-excalidraw-repo` | 单个字符串 `owner/name`，例如 `shalom-lab/repo1`（不要拆成两个 key） |
+
+**可 Settings 填写，也可事先写入 localStorage；启动会自动读。**
 
 1. 点击工具栏 **设置**
-2. 粘贴 GitHub PAT，填写 `owner` / `repo` / `branch` / `folder`（默认 `diagrams`）
-3. **测试连接** → **保存**
-4. **清除本地设置** 可立刻删掉 `localStorage` 中的 PAT
+2. 粘贴 GitHub PAT（密码框），填写仓库 `owner/repo`（单个输入框）
+3. **测试连接**（可选）→ **保存**（`setItem`）
+4. **清除** 会确认后 `removeItem` 两个键
+
+启动时静默读取上述两个键到 React state，不弹窗打断：
+
+- 已设置：Settings 显示「已保存」（token 仅掩码末 4 位）；功能可直接用，无需先打开 Settings
+- 未设置：显示「未设置」；仅在尝试 GitHub API（打开/保存等）时引导到 Settings
+
+切仓库时在 API 调用处再按 `/` 拆分 `owner` / `name`。不要把 PAT 写进仓库、`.env` 或 Actions 给浏览器用。
 
 ### PAT 权限（Scopes）
 
@@ -50,18 +65,18 @@ npm run preview
 ## 功能
 
 - **新建**：本地空白画布，无需 GitHub
-- **打开**：列出 `folder` 下的 `.excalidraw.json` / `.excalidraw` / `.json`，读取 Contents API
+- **打开**：列出 `diagrams/` 下的 `.excalidraw.json` / `.excalidraw` / `.json`，读取 Contents API
 - **保存 / 另存为**：`PUT` Contents API（有 `sha` 则更新，否则创建；另存为若文件已存在会自动带 `sha` 覆盖）
 - **删除**：在打开列表里删除仓库中的文件
 - **错误提示**：401 / 403 / 404 / 409 / 422 中文说明
 
-画布在未配置 GitHub 时也可正常使用；只有打开/保存需要 PAT。
+画布在未配置 GitHub 时也可正常使用；只有打开/保存需要 PAT。图表默认写到分支 `main`、目录 `diagrams/`（非 BYOK 键，应用内默认）。
 
 ## 仓库文件布局示例
 
 ```text
 your-repo/
-└── diagrams/                    # 设置里的 folder path
+└── diagrams/
     ├── architecture.excalidraw.json
     └── sprint-board.excalidraw.json
 ```
@@ -84,12 +99,12 @@ excalidraw-byok/
 ├── src/
 │   ├── App.tsx                 # 画布 + 工具栏 + 打开/保存流程
 │   ├── components/
-│   │   ├── SettingsModal.tsx   # BYOK 设置
+│   │   ├── SettingsModal.tsx   # BYOK 设置（token + owner/repo）
 │   │   ├── OpenModal.tsx       # 列出/打开/删除
 │   │   └── SaveModal.tsx       # 另存为文件名
 │   └── github/
 │       ├── client.ts           # Contents API 封装
-│       ├── storage.ts          # localStorage
+│       ├── storage.ts          # localStorage：gh-excalidraw-*
 │       └── types.ts
 ├── vite.config.ts              # 可选 GitHub 代理
 └── package.json
@@ -97,6 +112,8 @@ excalidraw-byok/
 
 ## 安全说明
 
-- PAT **仅**存在于你的浏览器 `localStorage`（键名 `excalidraw-byok-github-settings`）
+- PAT **仅**存在于你的浏览器 `localStorage` 键 `gh-excalidraw-token`
+- 仓库路径在 `gh-excalidraw-repo`（`owner/name` 单字符串）
 - 清设置或清站点数据即可移除密钥
 - 请使用最小权限、可随时撤销的 token
+- 从不把密钥写进仓库、`.env` 或 GitHub Actions 供浏览器使用

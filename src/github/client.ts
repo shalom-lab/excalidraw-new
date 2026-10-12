@@ -1,8 +1,12 @@
 import {
+  DEFAULT_BRANCH,
+  DEFAULT_FOLDER,
   GithubApiError,
+  parseRepo,
   type GithubContentItem,
   type GithubFileContent,
   type GithubSettings,
+  type ParsedRepo,
 } from './types'
 
 /**
@@ -15,6 +19,14 @@ function baseUrl(): string {
   return useProxy ? '/api/github' : 'https://api.github.com'
 }
 
+function requireRepo(settings: GithubSettings): ParsedRepo {
+  const parsed = parseRepo(settings.repo)
+  if (!parsed) {
+    throw new GithubApiError(422, '仓库格式无效，请使用 owner/repo')
+  }
+  return parsed
+}
+
 async function githubFetch(
   settings: GithubSettings,
   path: string,
@@ -23,7 +35,7 @@ async function githubFetch(
   const url = `${baseUrl()}${path}`
   const headers = new Headers(init.headers)
   headers.set('Accept', 'application/vnd.github+json')
-  headers.set('Authorization', `Bearer ${settings.pat.trim()}`)
+  headers.set('Authorization', `Bearer ${settings.token.trim()}`)
   headers.set('X-GitHub-Api-Version', '2022-11-28')
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
@@ -41,7 +53,6 @@ async function githubFetch(
     throw networkErr
   }
 
-  // If direct call somehow returns opaque failure, proxy is already on.
   return res
 }
 
@@ -78,8 +89,8 @@ function normalizeFolder(folder: string): string {
   return folder.replace(/^\/+|\/+$/g, '')
 }
 
-export function diagramPath(settings: GithubSettings, filename: string): string {
-  const folder = normalizeFolder(settings.folder || 'diagrams')
+export function diagramPath(_settings: GithubSettings, filename: string): string {
+  const folder = normalizeFolder(DEFAULT_FOLDER)
   const name = filename.endsWith('.excalidraw.json')
     ? filename
     : filename.endsWith('.excalidraw')
@@ -91,10 +102,11 @@ export function diagramPath(settings: GithubSettings, filename: string): string 
 export async function listDiagrams(
   settings: GithubSettings,
 ): Promise<GithubContentItem[]> {
-  const folder = normalizeFolder(settings.folder || 'diagrams')
+  const { owner, name } = requireRepo(settings)
+  const folder = normalizeFolder(DEFAULT_FOLDER)
   const path = folder
-    ? `/repos/${settings.owner}/${settings.repo}/contents/${folder}?ref=${encodeURIComponent(settings.branch)}`
-    : `/repos/${settings.owner}/${settings.repo}/contents?ref=${encodeURIComponent(settings.branch)}`
+    ? `/repos/${owner}/${name}/contents/${folder}?ref=${encodeURIComponent(DEFAULT_BRANCH)}`
+    : `/repos/${owner}/${name}/contents?ref=${encodeURIComponent(DEFAULT_BRANCH)}`
 
   const res = await githubFetch(settings, path)
   if (res.status === 404) {
@@ -105,7 +117,7 @@ export async function listDiagrams(
 
   const data = (await res.json()) as GithubContentItem[] | GithubContentItem
   if (!Array.isArray(data)) {
-    throw new GithubApiError(422, '路径不是目录，请检查 folder 设置')
+    throw new GithubApiError(422, '路径不是目录')
   }
 
   return data
@@ -123,7 +135,8 @@ export async function getFile(
   settings: GithubSettings,
   path: string,
 ): Promise<{ sha: string; text: string }> {
-  const apiPath = `/repos/${settings.owner}/${settings.repo}/contents/${path}?ref=${encodeURIComponent(settings.branch)}`
+  const { owner, name } = requireRepo(settings)
+  const apiPath = `/repos/${owner}/${name}/contents/${path}?ref=${encodeURIComponent(DEFAULT_BRANCH)}`
   const res = await githubFetch(settings, apiPath)
   if (!res.ok) await parseError(res)
   const data = (await res.json()) as GithubFileContent
@@ -140,11 +153,12 @@ export async function putFile(
   message: string,
   sha?: string,
 ): Promise<{ sha: string; path: string }> {
-  const apiPath = `/repos/${settings.owner}/${settings.repo}/contents/${path}`
+  const { owner, name } = requireRepo(settings)
+  const apiPath = `/repos/${owner}/${name}/contents/${path}`
   const body: Record<string, string> = {
     message,
     content: encodeUtf8ToBase64(contentText),
-    branch: settings.branch,
+    branch: DEFAULT_BRANCH,
   }
   if (sha) body.sha = sha
 
@@ -165,20 +179,22 @@ export async function deleteFile(
   sha: string,
   message: string,
 ): Promise<void> {
-  const apiPath = `/repos/${settings.owner}/${settings.repo}/contents/${path}`
+  const { owner, name } = requireRepo(settings)
+  const apiPath = `/repos/${owner}/${name}/contents/${path}`
   const res = await githubFetch(settings, apiPath, {
     method: 'DELETE',
     body: JSON.stringify({
       message,
       sha,
-      branch: settings.branch,
+      branch: DEFAULT_BRANCH,
     }),
   })
   if (!res.ok) await parseError(res)
 }
 
 export async function testConnection(settings: GithubSettings): Promise<string> {
-  const path = `/repos/${settings.owner}/${settings.repo}`
+  const { owner, name } = requireRepo(settings)
+  const path = `/repos/${owner}/${name}`
   const res = await githubFetch(settings, path)
   if (!res.ok) await parseError(res)
   const data = (await res.json()) as { full_name: string; private: boolean }

@@ -208,6 +208,20 @@
 .field span {
   color: #44403c;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  font-weight: 400;
+  font-size: 12px;
+  color: #57534e;
+  background: #f5f5f4;
+  border: 1px solid #e7e5e4;
+  border-radius: 999px;
+  padding: 1px 8px;
 }
 
 .field input {

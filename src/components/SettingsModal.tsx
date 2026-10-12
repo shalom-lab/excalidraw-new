@@ -3,11 +3,14 @@ import { testConnection } from '../github/client'
 import {
   clearSettings,
   isConfigured,
+  KEY_REPO,
+  KEY_TOKEN,
   saveSettings,
 } from '../github/storage'
 import {
   DEFAULT_SETTINGS,
   friendlyGithubError,
+  maskToken,
   type GithubSettings,
 } from '../github/types'
 
@@ -19,14 +22,19 @@ interface Props {
 }
 
 export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
-  const [form, setForm] = useState<GithubSettings>(initial)
+  const [tokenInput, setTokenInput] = useState('')
+  const [repoInput, setRepoInput] = useState('')
+  const [saved, setSaved] = useState<GithubSettings>(initial)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
-      setForm(initial)
+      setSaved(initial)
+      setRepoInput(initial.repo)
+      // Never prefill full secret into the password field
+      setTokenInput('')
       setMsg(null)
       setErr(null)
     }
@@ -34,21 +42,42 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
 
   if (!open) return null
 
-  const update = (key: keyof GithubSettings, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
-  }
+  const tokenStatus = saved.token.trim()
+    ? `已保存 ${maskToken(saved.token)}`
+    : '未设置'
+  const repoStatus = saved.repo.trim() ? `已保存 ${saved.repo}` : '未设置'
 
   const handleSave = () => {
-    saveSettings(form)
-    onSaved(form)
+    const next: GithubSettings = {
+      // Keep existing token if password field left blank (re-save repo only)
+      token: tokenInput.trim() || saved.token,
+      repo: repoInput.trim(),
+    }
+    if (!next.token.trim()) {
+      setErr('请填写 GitHub PAT')
+      setMsg(null)
+      return
+    }
+    if (!next.repo.includes('/')) {
+      setErr('仓库请填写 owner/repo 格式')
+      setMsg(null)
+      return
+    }
+    saveSettings(next)
+    setSaved(next)
+    setTokenInput('')
+    onSaved(next)
     setMsg('已保存到浏览器 localStorage（不会提交到仓库）')
     setErr(null)
   }
 
   const handleClear = () => {
+    if (!confirm('确定清除本地 PAT 与仓库设置？')) return
     clearSettings()
     const empty = { ...DEFAULT_SETTINGS }
-    setForm(empty)
+    setSaved(empty)
+    setTokenInput('')
+    setRepoInput('')
     onSaved(empty)
     setMsg('已清除本地设置')
     setErr(null)
@@ -59,10 +88,14 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
     setMsg(null)
     setErr(null)
     try {
-      if (!isConfigured(form)) {
-        throw new Error('请先填写 PAT、owner、repo、branch')
+      const candidate: GithubSettings = {
+        token: tokenInput.trim() || saved.token,
+        repo: repoInput.trim() || saved.repo,
       }
-      const name = await testConnection(form)
+      if (!isConfigured(candidate)) {
+        throw new Error('请先填写 PAT 与 owner/repo')
+      }
+      const name = await testConnection(candidate)
       setMsg(`连接成功：${name}`)
     } catch (e) {
       setErr(friendlyGithubError(e))
@@ -82,70 +115,52 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
         </header>
 
         <p className="hint">
-          PAT 与仓库信息仅保存在本机 <code>localStorage</code>，不会写入任何代码或提交。
-          需要权限：<strong>Contents: Read and write</strong>（经典 token 勾选{' '}
-          <code>repo</code>）。
+          PAT 与仓库仅保存在本机 <code>localStorage</code>（
+          <code>{KEY_TOKEN}</code> / <code>{KEY_REPO}</code>
+          ），不会写入任何代码或提交。需要权限：
+          <strong>Contents: Read and write</strong>（经典 token 勾选 <code>repo</code>
+          ）。可 Settings 填写，也可事先写入 localStorage；启动会自动读。
         </p>
 
         <label className="field">
-          <span>GitHub PAT</span>
+          <span>
+            GitHub PAT <span className="status-pill">{tokenStatus}</span>
+          </span>
           <input
             type="password"
             autoComplete="off"
             spellCheck={false}
-            placeholder="ghp_… 或 github_pat_…"
-            value={form.pat}
-            onChange={(e) => update('pat', e.target.value)}
+            placeholder={
+              saved.token
+                ? `已保存 ${maskToken(saved.token)} — 留空保持不变，或粘贴新 PAT`
+                : 'ghp_… 或 github_pat_…'
+            }
+            value={tokenInput}
+            onChange={(e) => setTokenInput(e.target.value)}
           />
         </label>
 
-        <div className="field-row">
-          <label className="field">
-            <span>Owner</span>
-            <input
-              placeholder="username 或 org"
-              value={form.owner}
-              onChange={(e) => update('owner', e.target.value.trim())}
-            />
-          </label>
-          <label className="field">
-            <span>Repo</span>
-            <input
-              placeholder="my-diagrams"
-              value={form.repo}
-              onChange={(e) => update('repo', e.target.value.trim())}
-            />
-          </label>
-        </div>
-
-        <div className="field-row">
-          <label className="field">
-            <span>Branch</span>
-            <input
-              placeholder="main"
-              value={form.branch}
-              onChange={(e) => update('branch', e.target.value.trim())}
-            />
-          </label>
-          <label className="field">
-            <span>Folder path</span>
-            <input
-              placeholder="diagrams"
-              value={form.folder}
-              onChange={(e) => update('folder', e.target.value.trim())}
-            />
-          </label>
-        </div>
+        <label className="field">
+          <span>
+            仓库 <span className="status-pill">{repoStatus}</span>
+          </span>
+          <input
+            placeholder="owner/repo"
+            spellCheck={false}
+            value={repoInput}
+            onChange={(e) => setRepoInput(e.target.value.trim())}
+          />
+        </label>
 
         {msg && <div className="banner success">{msg}</div>}
         {err && <div className="banner error">{err}</div>}
 
         <footer className="modal-footer">
           <button type="button" className="btn danger" onClick={handleClear}>
-            清除本地设置
+            清除
           </button>
           <div className="spacer" />
-          <button type="button" className="btn" disabled={busy} onClick={handleTest}>
+          <button type="button" className="btn" disabled={busy} onClick={() => void handleTest()}>
             {busy ? '测试中…' : '测试连接'}
           </button>
           <button type="button" className="btn primary" onClick={handleSave}>
