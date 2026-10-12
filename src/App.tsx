@@ -3,7 +3,7 @@ import type {
   BinaryFiles,
   ExcalidrawImperativeAPI,
 } from '@excalidraw/excalidraw/types'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import '@excalidraw/excalidraw/index.css'
 
 import { ImportLibraryModal } from './components/ImportLibraryModal'
@@ -72,15 +72,52 @@ export default function App() {
   const [currentPath, setCurrentPath] = useState<string | null>(null)
   const [currentSha, setCurrentSha] = useState<string | null>(null)
   const [currentName, setCurrentName] = useState<string>('untitled')
-  const [status, setStatus] = useState<string>('画布可用；配置 GitHub 后可打开/保存')
+  const [toast, setToast] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const titleInputRef = useRef<HTMLInputElement | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Force remount when loading a new scene so initialData applies cleanly
   const [sceneKey, setSceneKey] = useState(0)
   const [initialData, setInitialData] = useState<DiagramDoc>(() => emptyDoc())
 
   const configured = useMemo(() => isConfigured(settings), [settings])
+
+  const showToast = useCallback((message: string, ms = 2800) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    setToast(message)
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, ms)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (editingTitle) {
+      titleInputRef.current?.focus()
+      titleInputRef.current?.select()
+    }
+  }, [editingTitle])
+
+  const commitTitle = useCallback(() => {
+    const next = titleDraft.trim() || 'untitled'
+    setCurrentName(next)
+    setEditingTitle(false)
+  }, [titleDraft])
+
+  const startEditTitle = useCallback(() => {
+    setTitleDraft(currentName || 'untitled')
+    setEditingTitle(true)
+  }, [currentName])
 
   const libraryReturnUrl = useMemo(() => {
     if (typeof window === 'undefined') return undefined
@@ -147,7 +184,7 @@ export default function App() {
     applyScene(emptyDoc(), null, null)
     setCurrentName('untitled')
     setError(null)
-    setStatus('已新建空白画布')
+    showToast('已新建空白画布')
   }
 
   const handleOpenItem = async (item: GithubContentItem) => {
@@ -159,7 +196,7 @@ export default function App() {
       const doc = JSON.parse(text) as DiagramDoc
       if (!doc.elements) throw new Error('文件不是有效的 Excalidraw JSON')
       applyScene(doc, item.path, sha)
-      setStatus(`已打开 ${item.path}`)
+      showToast(`已打开 ${item.path}`)
     } catch (e) {
       setError(friendlyGithubError(e))
     } finally {
@@ -198,7 +235,7 @@ export default function App() {
       setCurrentSha(result.sha)
       const base = result.path.split('/').pop() || filenameOrPath
       setCurrentName(base.replace(/\.excalidraw\.json$/i, '').replace(/\.excalidraw$/i, ''))
-      setStatus(`已保存 ${result.path}`)
+      showToast(`已保存 ${result.path}`)
       setSaveAsOpen(false)
     } catch (e) {
       // If save-as hit "sha required" because file exists, retry with sha
@@ -225,7 +262,7 @@ export default function App() {
               .replace(/\.excalidraw\.json$/i, '')
               .replace(/\.excalidraw$/i, ''),
           )
-          setStatus(`已覆盖保存 ${result.path}`)
+          showToast(`已覆盖保存 ${result.path}`)
           setSaveAsOpen(false)
           setError(null)
           return
@@ -260,11 +297,11 @@ export default function App() {
       token: apiRef.current?.id,
     })
     window.open(href, '_excalidraw_libraries')
-    setStatus(
+    showToast(
       '已打开官方库目录；在站点点击 Add 后会带着 #addLibrary 回到本应用并自动安装',
     )
     setImportLibOpen(false)
-  }, [])
+  }, [showToast])
 
   const installLibraryFromUrl = useCallback(async (rawUrl: string) => {
     const api = apiRef.current
@@ -286,7 +323,7 @@ export default function App() {
         openLibraryMenu: true,
         defaultStatus: 'published',
       })
-      setStatus(`已导入官方库：${url}`)
+      showToast(`已导入官方库：${url}`)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setError(`导入库失败：${msg}`)
@@ -294,16 +331,45 @@ export default function App() {
     } finally {
       setBusy(false)
     }
-  }, [])
+  }, [showToast])
 
   return (
     <div className="app">
       <header className="toolbar">
         <div className="brand">
           <strong>Excalidraw</strong>
-          <span className="file-badge" title={currentPath ?? '未保存到 GitHub'}>
-            {currentPath ? currentPath : `${currentName}（本地）`}
-          </span>
+          {editingTitle ? (
+            <input
+              ref={titleInputRef}
+              className="title-input"
+              value={titleDraft}
+              aria-label="图表标题"
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  commitTitle()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setEditingTitle(false)
+                }
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="file-badge title-btn"
+              title={
+                currentPath
+                  ? `${currentPath}（点击重命名）`
+                  : '点击重命名'
+              }
+              onClick={startEditTitle}
+            >
+              {currentName || 'untitled'}
+            </button>
+          )}
         </div>
         <div className="actions">
           <button type="button" className="btn" onClick={handleNew} disabled={busy}>
@@ -368,18 +434,17 @@ export default function App() {
         </div>
       </header>
 
-      {(error || status) && (
-        <div className={`status-bar ${error ? 'is-error' : ''}`}>
-          {error ? (
-            <>
-              <span>{error}</span>
-              <button type="button" className="linkish" onClick={() => setError(null)}>
-                关闭
-              </button>
-            </>
-          ) : (
-            <span>{status}</span>
-          )}
+      {error && (
+        <div className="toast toast-error" role="alert">
+          <span>{error}</span>
+          <button type="button" className="linkish" onClick={() => setError(null)}>
+            关闭
+          </button>
+        </div>
+      )}
+      {!error && toast && (
+        <div className="toast toast-info" role="status">
+          {toast}
         </div>
       )}
 
@@ -404,7 +469,7 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         onSaved={(s) => {
           setSettings(s)
-          setStatus(
+          showToast(
             isConfigured(s)
               ? `已配置 ${s.repo}`
               : '设置已更新（尚未完整配置）',
