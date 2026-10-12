@@ -19,6 +19,17 @@ export default defineConfig({
           'X-GitHub-Api-Version': '2022-11-28',
         },
       },
+      // Library CDN proxy (dev only; production CDNs already send ACAO: *)
+      '/api/libraries': {
+        target: 'https://libraries.excalidraw.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/libraries/, ''),
+      },
+      '/api/github-raw': {
+        target: 'https://raw.githubusercontent.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/github-raw/, ''),
+      },
     },
   },
 })

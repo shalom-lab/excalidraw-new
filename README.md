@@ -68,6 +68,7 @@ npm run preview
 - **打开**：列出 `diagrams/` 下的 `.excalidraw.json` / `.excalidraw` / `.json`，读取 Contents API
 - **保存 / 另存为**：`PUT` Contents API（有 `sha` 则更新，否则创建；另存为若文件已存在会自动带 `sha` 覆盖）
 - **删除**：在打开列表里删除仓库中的文件
+- **导入官方库**：从 [libraries.excalidraw.com](https://libraries.excalidraw.com) 一键安装（见下），无需先下载 `.excalidrawlib`，也**不需要** GitHub Token
 - **错误提示**：401 / 403 / 404 / 409 / 422 中文说明
 
 画布在未配置 GitHub 时也可正常使用；只有打开/保存需要 PAT。图表默认写到分支 `main`、目录 `diagrams/`（非 BYOK 键，应用内默认）。
@@ -91,24 +92,65 @@ your-repo/
 
 - 前端自动回退到 `/api/github/*`
 - Vite 代理见 `vite.config.ts` → `https://api.github.com`
+- 官方库 CDN：`/api/libraries/*` → `libraries.excalidraw.com`；`/api/github-raw/*` → `raw.githubusercontent.com`（仅开发服务器；生产环境 CDN 已返回 `Access-Control-Allow-Origin: *`）
 
 ## 项目结构
 
 ```text
 excalidraw-byok/
 ├── src/
-│   ├── App.tsx                 # 画布 + 工具栏 + 打开/保存流程
+│   ├── App.tsx                 # 画布 + 工具栏 + 打开/保存 + 官方库导入
 │   ├── components/
 │   │   ├── SettingsModal.tsx   # BYOK 设置（token + owner/repo）
 │   │   ├── OpenModal.tsx       # 列出/打开/删除
-│   │   └── SaveModal.tsx       # 另存为文件名
+│   │   ├── SaveModal.tsx       # 另存为文件名
+│   │   └── ImportLibraryModal.tsx  # 打开官方库 / 粘贴 URL 安装
+│   ├── library/
+│   │   ├── fetchLibrary.ts     # 下载 .excalidrawlib + 代理回退 + browse URL
+│   │   └── storage.ts          # useHandleLibrary localStorage adapter
 │   └── github/
 │       ├── client.ts           # Contents API 封装
 │       ├── storage.ts          # localStorage：gh-excalidraw-*
 │       └── types.ts
-├── vite.config.ts              # 可选 GitHub 代理
+├── vite.config.ts              # GitHub / 库 CDN 开发代理
 └── package.json
 ```
+
+## 一键导入官方库（libraries.excalidraw.com）
+
+本应用支持官方「Add to Excalidraw」回流：URL 带 `#addLibrary=<excalidrawlib URL>`（或旧版 `?addLibrary=`）时，会用 `@excalidraw/excalidraw` 的 `useHandleLibrary` 拉取 JSON 并 `updateLibrary({ merge: true })`，再经 adapter 写入 `localStorage`（键 `excalidraw-byok-library`）。
+
+### 推荐用法（侧栏 / 工具栏）
+
+1. 打开左侧 **图库（Library）** → **浏览库 / Libraries**（Excalidraw 内置按钮），或点工具栏 **导入官方库** → **打开官方库目录**。
+2. 链接会打开 `https://libraries.excalidraw.com?referrer=<本应用 origin+pathname>&useHash=true&token=<实例 id>&…`。
+3. 在目录站点点 **Add to Excalidraw**（对我们的 referrer 会显示为 Add to Excalidraw），浏览器回到本应用并自动安装。
+4. `libraryReturnUrl` 已设为当前页（含 GitHub Pages 的 `/excalidraw-new/` 路径），因此不会跳去 excalidraw.com。
+
+Live 示例：https://shalom-lab.github.io/excalidraw-new/
+
+### 若站点默认仍指向 excalidraw.com
+
+直接打开 [libraries.excalidraw.com](https://libraries.excalidraw.com)（没有 `referrer`）时，Add 会跳到 **excalidraw.com**。解决办法：
+
+- **始终从本应用打开目录**（侧栏 Libraries 或工具栏「导入官方库」），这样带有正确 `referrer`；或
+- **书签 / 手动深链**：把库地址接到本应用 hash 上，例如：
+
+  ```text
+  https://shalom-lab.github.io/excalidraw-new/#addLibrary=https%3A%2F%2Flibraries.excalidraw.com%2Flibraries%2Fjumpingrivers%2Fr.excalidrawlib
+  ```
+
+- **粘贴 URL**：工具栏 **导入官方库** → 粘贴 `.excalidrawlib` 直链 → **从 URL 安装**（支持 libraries CDN、GitHub raw / blob、jsDelivr、unpkg）。无需下载文件，无需 GitHub Token。
+
+### 实现要点
+
+| 机制 | 说明 |
+| --- | --- |
+| `useHandleLibrary` | 监听初始 URL 与 `hashchange`，解析 `#addLibrary` / `?addLibrary` |
+| `libraryReturnUrl` | 传给 `<Excalidraw>`，供内置「浏览库」按钮生成 referrer |
+| `updateLibrary` | `merge: true`，合并进现有图库并打开图库侧栏 |
+| 持久化 | `libraryAdapter` → `localStorage` `excalidraw-byok-library` |
+| CORS | 生产直连 CDN；本地开发可回退 Vite `/api/libraries`、`/api/github-raw` |
 
 ## 安全说明
 

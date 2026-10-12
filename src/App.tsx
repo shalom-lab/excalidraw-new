@@ -1,4 +1,4 @@
-import { Excalidraw } from '@excalidraw/excalidraw'
+import { Excalidraw, useHandleLibrary } from '@excalidraw/excalidraw'
 import type {
   BinaryFiles,
   ExcalidrawImperativeAPI,
@@ -6,6 +6,7 @@ import type {
 import { useCallback, useMemo, useRef, useState } from 'react'
 import '@excalidraw/excalidraw/index.css'
 
+import { ImportLibraryModal } from './components/ImportLibraryModal'
 import { OpenModal } from './components/OpenModal'
 import { SaveModal } from './components/SaveModal'
 import { SettingsModal } from './components/SettingsModal'
@@ -17,6 +18,14 @@ import {
   type GithubContentItem,
   type GithubSettings,
 } from './github/types'
+import {
+  buildLibrariesBrowseUrl,
+  fetchLibraryBlob,
+  getAppReturnUrl,
+  isAllowedLibraryUrl,
+  normalizeLibraryUrl,
+} from './library/fetchLibrary'
+import { libraryAdapter } from './library/storage'
 import './App.css'
 
 interface DiagramDoc {
@@ -52,10 +61,13 @@ function stripAppState(appState: Record<string, unknown> | undefined) {
 
 export default function App() {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
+  const [excalidrawAPI, setExcalidrawAPI] =
+    useState<ExcalidrawImperativeAPI | null>(null)
   const [settings, setSettings] = useState<GithubSettings>(() => loadSettings())
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [openOpen, setOpenOpen] = useState(false)
   const [saveAsOpen, setSaveAsOpen] = useState(false)
+  const [importLibOpen, setImportLibOpen] = useState(false)
 
   const [currentPath, setCurrentPath] = useState<string | null>(null)
   const [currentSha, setCurrentSha] = useState<string | null>(null)
@@ -70,9 +82,22 @@ export default function App() {
 
   const configured = useMemo(() => isConfigured(settings), [settings])
 
+  const libraryReturnUrl = useMemo(() => {
+    if (typeof window === 'undefined') return undefined
+    return getAppReturnUrl()
+  }, [])
+
   const setApi = useCallback((api: ExcalidrawImperativeAPI) => {
     apiRef.current = api
+    setExcalidrawAPI(api)
   }, [])
+
+  // Official #addLibrary hash/query install + localStorage persistence
+  useHandleLibrary({
+    excalidrawAPI,
+    adapter: libraryAdapter,
+    validateLibraryUrl: isAllowedLibraryUrl,
+  })
 
   const readScene = useCallback((): DiagramDoc => {
     const api = apiRef.current
@@ -228,6 +253,49 @@ export default function App() {
     }
   }
 
+  const openOfficialLibraries = useCallback(() => {
+    const returnUrl = getAppReturnUrl()
+    const href = buildLibrariesBrowseUrl({
+      returnUrl,
+      token: apiRef.current?.id,
+    })
+    window.open(href, '_excalidraw_libraries')
+    setStatus(
+      '已打开官方库目录；在站点点击 Add 后会带着 #addLibrary 回到本应用并自动安装',
+    )
+    setImportLibOpen(false)
+  }, [])
+
+  const installLibraryFromUrl = useCallback(async (rawUrl: string) => {
+    const api = apiRef.current
+    if (!api) {
+      throw new Error('画布尚未就绪，请稍后再试')
+    }
+    const url = normalizeLibraryUrl(rawUrl)
+    if (!isAllowedLibraryUrl(url)) {
+      throw new Error('不允许的库地址（仅支持 excalidraw / GitHub raw / jsDelivr / unpkg）')
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const blob = await fetchLibraryBlob(url)
+      await api.updateLibrary({
+        libraryItems: blob,
+        merge: true,
+        prompt: false,
+        openLibraryMenu: true,
+        defaultStatus: 'published',
+      })
+      setStatus(`已导入官方库：${url}`)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(`导入库失败：${msg}`)
+      throw e instanceof Error ? e : new Error(msg)
+    } finally {
+      setBusy(false)
+    }
+  }, [])
+
   return (
     <div className="app">
       <header className="toolbar">
@@ -283,6 +351,15 @@ export default function App() {
           <button
             type="button"
             className="btn"
+            disabled={busy}
+            onClick={() => setImportLibOpen(true)}
+            title="从 libraries.excalidraw.com 一键导入，或粘贴 .excalidrawlib URL"
+          >
+            导入官方库
+          </button>
+          <button
+            type="button"
+            className="btn"
             onClick={() => setSettingsOpen(true)}
             title={configured ? '已保存' : '未设置'}
           >
@@ -317,6 +394,7 @@ export default function App() {
             scrollToContent: true,
           }}
           langCode="zh-CN"
+          libraryReturnUrl={libraryReturnUrl}
         />
       </div>
 
@@ -347,6 +425,14 @@ export default function App() {
         folder={DEFAULT_FOLDER}
         onClose={() => setSaveAsOpen(false)}
         onSave={(filename) => void doSave(filename, true)}
+      />
+
+      <ImportLibraryModal
+        open={importLibOpen}
+        onClose={() => setImportLibOpen(false)}
+        onBrowseOfficial={openOfficialLibraries}
+        onInstallUrl={installLibraryFromUrl}
+        excalidrawId={excalidrawAPI?.id ?? null}
       />
     </div>
   )
