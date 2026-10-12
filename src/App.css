@@ -1,0 +1,312 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: #f5f5f4;
+  color: #1c1917;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'PingFang SC',
+    'Noto Sans SC',
+    sans-serif;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #1c1917;
+  color: #fafaf9;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brand strong {
+  white-space: nowrap;
+}
+
+.file-badge {
+  font-size: 12px;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40vw;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: #ecfdf5;
+  color: #065f46;
+  border-bottom: 1px solid #a7f3d0;
+  flex-shrink: 0;
+}
+
+.status-bar.is-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border-bottom-color: #fecaca;
+}
+
+.canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid #44403c;
+  background: #292524;
+  color: #fafaf9;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  background: #3f3f46;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: #2563eb;
+  border-color: #1d4ed8;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn.danger {
+  background: #7f1d1d;
+  border-color: #991b1b;
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: #991b1b;
+}
+
+.btn.small {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.linkish {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.modal {
+  background: #fff;
+  color: #1c1917;
+  border-radius: 12px;
+  width: min(560px, 100%);
+  max-height: min(80vh, 720px);
+  overflow: auto;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  padding: 16px 18px 14px;
+}
+
+.modal.narrow {
+  width: min(420px, 100%);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.icon-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: #57534e;
+}
+
+.hint {
+  font-size: 13px;
+  color: #57534e;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.hint code {
+  background: #f5f5f4;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  flex: 1;
+  font-size: 13px;
+}
+
+.field span {
+  color: #44403c;
+  font-weight: 500;
+}
+
+.field input {
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.field input:focus {
+  outline: 2px solid #93c5fd;
+  border-color: #60a5fa;
+}
+
+.field-row {
+  display: flex;
+  gap: 10px;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.banner {
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.banner.success {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.banner.error {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.muted {
+  color: #78716c;
+  font-size: 13px;
+}
+
+.file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.file-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f5f5f4;
+}
+
+.file-list li:last-child {
+  border-bottom: none;
+}
+
+.file-name {
+  appearance: none;
+  border: none;
+  background: transparent;
+  text-align: left;
+  flex: 1;
+  cursor: pointer;
+  font-size: 14px;
+  color: #1d4ed8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-name:hover {
+  text-decoration: underline;
+}
+
+.file-meta {
+  font-size: 12px;
+  color: #a8a29e;
+  white-space: nowrap;
+}
+
+/* Excalidraw needs non-zero height parent — already flex:1 on .canvas */
+.canvas .excalidraw {
+  height: 100%;
+}
