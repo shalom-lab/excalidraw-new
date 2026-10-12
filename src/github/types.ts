@@ -59,6 +59,11 @@ export class GithubApiError extends Error {
 
 export function friendlyGithubError(err: unknown): string {
   if (err instanceof GithubApiError) {
+    const msg = err.message || ''
+    const shaIssue =
+      /sha/i.test(msg) ||
+      /wasn't supplied/i.test(msg) ||
+      /does not match/i.test(msg)
     switch (err.status) {
       case 401:
         return '认证失败 (401)：PAT 无效或已过期，请在设置中更新。'
@@ -67,11 +72,15 @@ export function friendlyGithubError(err: unknown): string {
       case 404:
         return '未找到 (404)：仓库/分支/路径不存在，或 PAT 无权访问私有仓库。'
       case 409:
-        return '冲突 (409)：文件已被他人修改，请重新打开后再保存。'
+        return shaIssue
+          ? `冲突 (409)：文件 sha 不匹配（可能已被修改）。请刷新列表后重试。${msg ? ` ${msg}` : ''}`
+          : '冲突 (409)：文件已被他人修改，请重新打开后再保存。'
       case 422:
-        return `请求无效 (422)：${err.message}`
+        return shaIssue
+          ? `请求无效 (422)：删除/更新需要有效的文件 sha。${msg ? ` ${msg}` : ''} 请刷新列表后重试。`
+          : `请求无效 (422)：${msg}`
       default:
-        return `GitHub API 错误 (${err.status})：${err.message}`
+        return `GitHub API 错误 (${err.status})：${msg}`
     }
   }
   if (err instanceof Error) return err.message

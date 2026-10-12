@@ -37,13 +37,16 @@ async function githubFetch(
   headers.set('Accept', 'application/vnd.github+json')
   headers.set('Authorization', `Bearer ${settings.token.trim()}`)
   headers.set('X-GitHub-Api-Version', '2022-11-28')
+  // Avoid stale Contents listings after mutate (delete/save): browser may
+  // otherwise reuse a cached GET and the Open modal keeps showing deleted files.
+  headers.set('Cache-Control', 'no-cache')
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
 
   let res: Response
   try {
-    res = await fetch(url, { ...init, headers })
+    res = await fetch(url, { ...init, headers, cache: 'no-store' })
   } catch (networkErr) {
     // Vite /api/github proxy exists only in `vite dev`. Never flip permanently
     // on static hosts (GitHub Pages) — that path 404s and poisoned later calls.
@@ -110,9 +113,11 @@ export async function listDiagrams(
 ): Promise<GithubContentItem[]> {
   const { owner, name } = requireRepo(settings)
   const folder = normalizeFolder(DEFAULT_FOLDER)
+  // Cache-bust query so intermediaries cannot reuse a pre-delete directory listing.
+  const bust = `_=${Date.now()}`
   const path = folder
-    ? `/repos/${owner}/${name}/contents/${folder}?ref=${encodeURIComponent(DEFAULT_BRANCH)}`
-    : `/repos/${owner}/${name}/contents?ref=${encodeURIComponent(DEFAULT_BRANCH)}`
+    ? `/repos/${owner}/${name}/contents/${folder}?ref=${encodeURIComponent(DEFAULT_BRANCH)}&${bust}`
+    : `/repos/${owner}/${name}/contents?ref=${encodeURIComponent(DEFAULT_BRANCH)}&${bust}`
 
   const res = await githubFetch(settings, path)
   if (res.status === 404) {
@@ -192,13 +197,22 @@ export async function deleteFile(
   sha: string,
   message: string,
 ): Promise<void> {
+  const trimmedSha = sha?.trim() ?? ''
+  if (!trimmedSha) {
+    // GitHub Contents DELETE requires the blob sha; without it the API returns
+    // 422 ("sha wasn't supplied"). Fail loudly here so the Open modal can show it.
+    throw new GithubApiError(
+      422,
+      "sha wasn't supplied — GitHub Contents delete requires the file blob sha; refresh the list and try again",
+    )
+  }
   const { owner, name } = requireRepo(settings)
   const apiPath = `/repos/${owner}/${name}/contents/${path}`
   const res = await githubFetch(settings, apiPath, {
     method: 'DELETE',
     body: JSON.stringify({
       message,
-      sha,
+      sha: trimmedSha,
       branch: DEFAULT_BRANCH,
     }),
   })
