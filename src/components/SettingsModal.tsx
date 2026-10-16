@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react'
-import { testConnection } from '../github/client'
 import {
   clearSettings,
-  isConfigured,
   KEY_REPO,
   KEY_TOKEN,
   saveSettings,
 } from '../github/storage'
 import {
   DEFAULT_SETTINGS,
-  friendlyGithubError,
   maskToken,
   type GithubSettings,
 } from '../github/types'
@@ -25,7 +22,6 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
   const [tokenInput, setTokenInput] = useState('')
   const [repoInput, setRepoInput] = useState('')
   const [saved, setSaved] = useState<GithubSettings>(initial)
-  const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
@@ -81,27 +77,6 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
     onSaved(empty)
     setMsg('已清除本地设置')
     setErr(null)
-  }
-
-  const handleTest = async () => {
-    setBusy(true)
-    setMsg(null)
-    setErr(null)
-    try {
-      const candidate: GithubSettings = {
-        token: tokenInput.trim() || saved.token,
-        repo: repoInput.trim() || saved.repo,
-      }
-      if (!isConfigured(candidate)) {
-        throw new Error('请先填写 PAT 与 owner/repo')
-      }
-      const name = await testConnection(candidate)
-      setMsg(`连接成功：${name}`)
-    } catch (e) {
-      setErr(friendlyGithubError(e))
-    } finally {
-      setBusy(false)
-    }
   }
 
   return (
@@ -160,9 +135,6 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
             清除
           </button>
           <div className="spacer" />
-          <button type="button" className="btn" disabled={busy} onClick={() => void handleTest()}>
-            {busy ? '测试中…' : '测试连接'}
-          </button>
           <button type="button" className="btn primary" onClick={handleSave}>
             保存
           </button>

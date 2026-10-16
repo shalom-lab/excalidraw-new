@@ -219,13 +219,5 @@ export async function deleteFile(
   if (!res.ok) await parseError(res)
 }
 
-export async function testConnection(settings: GithubSettings): Promise<string> {
-  const { owner, name } = requireRepo(settings)
-  const path = `/repos/${owner}/${name}`
-  const res = await githubFetch(settings, path)
-  if (!res.ok) await parseError(res)
-  const data = (await res.json()) as { full_name: string; private: boolean }
-  return `${data.full_name}${data.private ? ' (private)' : ' (public)'}`
-}
 
 export { useProxy }

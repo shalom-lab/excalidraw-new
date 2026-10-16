@@ -43,7 +43,7 @@ npm run preview
 
 1. 点击工具栏 **设置**
 2. 粘贴 GitHub PAT（密码框），填写仓库 `owner/repo`（单个输入框）
-3. **测试连接**（可选）→ **保存**（`setItem`）
+3. **保存**（`setItem`）
 4. **清除** 会确认后 `removeItem` 两个键
 
 启动时静默读取上述两个键到 React state，不弹窗打断：
