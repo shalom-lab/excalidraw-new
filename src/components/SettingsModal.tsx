@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   clearSettings,
+  isValidSettings,
   KEY_REPO,
   KEY_TOKEN,
   saveSettings,
@@ -8,6 +9,7 @@ import {
 import {
   DEFAULT_SETTINGS,
   maskToken,
+  parseRepo,
   type GithubSettings,
 } from '../github/types'
 
@@ -50,16 +52,26 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
       repo: repoInput.trim(),
     }
     if (!next.token.trim()) {
-      setErr('请填写 GitHub PAT')
+      setErr('请填写 GitHub PAT（不会把空值写入 localStorage）')
       setMsg(null)
       return
     }
-    if (!next.repo.includes('/')) {
-      setErr('仓库请填写 owner/repo 格式')
+    if (!parseRepo(next.repo)) {
+      setErr('仓库请填写有效的 owner/repo 格式（不会把无效值写入 localStorage）')
       setMsg(null)
       return
     }
-    saveSettings(next)
+    if (!isValidSettings(next)) {
+      setErr('设置未通过校验，已保留原有 localStorage，未覆盖写入')
+      setMsg(null)
+      return
+    }
+    const ok = saveSettings(next)
+    if (!ok) {
+      setErr('保存失败：校验未通过或浏览器拒绝写入，原有设置未被覆盖')
+      setMsg(null)
+      return
+    }
     setSaved(next)
     setTokenInput('')
     onSaved(next)
@@ -94,7 +106,7 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
           <code>{KEY_TOKEN}</code> / <code>{KEY_REPO}</code>
           ），不会写入任何代码或提交。需要权限：
           <strong>Contents: Read and write</strong>（经典 token 勾选 <code>repo</code>
-          ）。可 Settings 填写，也可事先写入 localStorage；启动会自动读。
+          ）。可 Settings 填写，也可事先写入 localStorage；启动只读不写，仅「保存」在校验通过后写入。
         </p>
 
         <label className="field">

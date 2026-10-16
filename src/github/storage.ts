@@ -1,10 +1,15 @@
-import { DEFAULT_SETTINGS, type GithubSettings } from './types'
+import {
+  DEFAULT_SETTINGS,
+  looksLikeErrorPlaceholder,
+  parseRepo,
+  type GithubSettings,
+} from './types'
 
 /** Flat, hyphenated BYOK keys — mandatory convention. */
 export const KEY_TOKEN = 'gh-excalidraw-token'
 export const KEY_REPO = 'gh-excalidraw-repo'
 
-/** Legacy JSON blob key — removed on load/save/clear. */
+/** Legacy JSON blob key — removed only on explicit save/clear (not bootstrap). */
 const LEGACY_KEY = 'excalidraw-byok-github-settings'
 
 function removeLegacy(): void {
@@ -17,11 +22,10 @@ function removeLegacy(): void {
 
 /**
  * Silently read both keys from localStorage into settings shape.
- * No modal interrupt — call on App start.
+ * Bootstrap is read-only — never setItem / removeItem here.
  */
 export function loadSettings(): GithubSettings {
   try {
-    removeLegacy()
     return {
       token: localStorage.getItem(KEY_TOKEN) ?? '',
       repo: localStorage.getItem(KEY_REPO) ?? '',
@@ -31,20 +35,52 @@ export function loadSettings(): GithubSettings {
   }
 }
 
-/** save = setItem for each flat key (never a JSON blob of secrets). */
-export function saveSettings(settings: GithubSettings): void {
-  localStorage.setItem(KEY_TOKEN, settings.token.trim())
-  localStorage.setItem(KEY_REPO, settings.repo.trim())
-  removeLegacy()
+/**
+ * True only when token + repo are non-empty, repo parses as owner/name,
+ * and neither looks like an error / placeholder string.
+ */
+export function isValidSettings(settings: GithubSettings): boolean {
+  const token = settings.token.trim()
+  const repo = settings.repo.trim()
+  if (!token || looksLikeErrorPlaceholder(token)) return false
+  if (!repo || looksLikeErrorPlaceholder(repo)) return false
+  if (!parseRepo(repo)) return false
+  return true
+}
+
+/**
+ * Persist settings only after validation passes.
+ * Empty / invalid / error-placeholder values are refused and do not
+ * overwrite existing correct localStorage entries.
+ * @returns true if both keys were written
+ */
+export function saveSettings(settings: GithubSettings): boolean {
+  const token = settings.token.trim()
+  const repo = settings.repo.trim()
+  if (!isValidSettings({ token, repo })) {
+    return false
+  }
+  try {
+    localStorage.setItem(KEY_TOKEN, token)
+    localStorage.setItem(KEY_REPO, repo)
+    removeLegacy()
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** clear = removeItem for both keys. */
 export function clearSettings(): void {
-  localStorage.removeItem(KEY_TOKEN)
-  localStorage.removeItem(KEY_REPO)
-  removeLegacy()
+  try {
+    localStorage.removeItem(KEY_TOKEN)
+    localStorage.removeItem(KEY_REPO)
+    removeLegacy()
+  } catch {
+    // ignore
+  }
 }
 
 export function isConfigured(settings: GithubSettings): boolean {
-  return Boolean(settings.token.trim() && settings.repo.trim().includes('/'))
+  return isValidSettings(settings)
 }

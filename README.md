@@ -39,14 +39,14 @@ npm run preview
 | `gh-excalidraw-token` | GitHub PAT（BYOK） |
 | `gh-excalidraw-repo` | 单个字符串 `owner/name`，例如 `shalom-lab/repo1`（不要拆成两个 key） |
 
-**可 Settings 填写，也可事先写入 localStorage；启动会自动读。**
+**可 Settings 填写，也可事先写入 localStorage；启动只读不写。**
 
 1. 点击工具栏 **设置**
 2. 粘贴 GitHub PAT（密码框），填写仓库 `owner/repo`（单个输入框）
-3. **保存**（`setItem`）
+3. **保存**：仅当 token 非空、repo 为有效 `owner/name` 且非错误占位时才 `setItem`；空串 / 校验失败 **不会** 覆盖已有正确值
 4. **清除** 会确认后 `removeItem` 两个键
 
-启动时静默读取上述两个键到 React state，不弹窗打断：
+启动时静默 **读取** 上述两个键到 React state（不 `setItem`、不回写），不弹窗打断：
 
 - 已设置：Settings 显示「已保存」（token 仅掩码末 4 位）；功能可直接用，无需先打开 Settings
 - 未设置：显示「未设置」；仅在尝试 GitHub API（打开/保存等）时引导到 Settings
@@ -69,7 +69,7 @@ npm run preview
 - **保存 / 另存为**：`PUT` Contents API（有 `sha` 则更新，否则创建；另存为若文件已存在会自动带 `sha` 覆盖）
 - **删除**：在打开列表里删除仓库中的文件
 - **导入官方库**：从 [libraries.excalidraw.com](https://libraries.excalidraw.com) 一键安装（见下），无需先下载 `.excalidrawlib`，也**不需要** GitHub Token
-- **错误提示**：401 / 403 / 404 / 409 / 422 中文说明
+- **错误提示**：401 / 403（权限 vs 限流）/ 404 / 409 / 422 / 网络·CORS（Failed to fetch）中文说明；打开列表时「真无文件」与「请求失败」分开显示，不会叠在一起
 - **本地自动草稿**：画布变更防抖写入浏览器 `localStorage`（过大时回退 IndexedDB）；刷新/关闭不丢未保存内容；成功保存到 GitHub 或「新建」时清除。启动若有草稿会恢复并提示「已从本地草稿恢复」。**不替代** GitHub 保存。
 
 画布在未配置 GitHub 时也可正常使用；只有打开/保存需要 PAT。图表默认写到分支 `main`、目录 `diagrams/`（非 BYOK 键，应用内默认）。

@@ -22,9 +22,23 @@ function baseUrl(): string {
 function requireRepo(settings: GithubSettings): ParsedRepo {
   const parsed = parseRepo(settings.repo)
   if (!parsed) {
-    throw new GithubApiError(422, '仓库格式无效，请使用 owner/repo')
+    throw new GithubApiError(422, '仓库格式无效或未配置，请使用 owner/repo')
   }
   return parsed
+}
+
+function requireToken(settings: GithubSettings): string {
+  const token = settings.token.trim()
+  if (!token) {
+    throw new GithubApiError(401, '未配置 GitHub PAT，请先在设置中填写')
+  }
+  return token
+}
+
+function toNetworkError(cause: unknown): GithubApiError {
+  const detail =
+    cause instanceof Error && cause.message ? cause.message : 'Failed to fetch'
+  return new GithubApiError(0, detail)
 }
 
 async function githubFetch(
@@ -32,10 +46,11 @@ async function githubFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
+  const token = requireToken(settings)
   const url = `${baseUrl()}${path}`
   const headers = new Headers(init.headers)
   headers.set('Accept', 'application/vnd.github+json')
-  headers.set('Authorization', `Bearer ${settings.token.trim()}`)
+  headers.set('Authorization', `Bearer ${token}`)
   headers.set('X-GitHub-Api-Version', '2022-11-28')
   // Avoid stale Contents listings after mutate (delete/save): browser may
   // otherwise reuse a cached GET and the Open modal keeps showing deleted files.
@@ -56,10 +71,10 @@ async function githubFetch(
         return await githubFetch(settings, path, init)
       } catch {
         useProxy = false
-        throw networkErr
+        throw toNetworkError(networkErr)
       }
     }
-    throw networkErr
+    throw toNetworkError(networkErr)
   }
 
   return res
@@ -72,6 +87,16 @@ async function parseError(res: Response): Promise<never> {
     if (body.message) message = body.message
   } catch {
     // ignore
+  }
+  if (res.status === 403) {
+    const remaining = res.headers.get('X-RateLimit-Remaining')
+    if (
+      remaining === '0' ||
+      /rate limit/i.test(message) ||
+      /secondary rate/i.test(message)
+    ) {
+      throw new GithubApiError(403, 'API rate limit exceeded')
+    }
   }
   throw new GithubApiError(res.status, message)
 }
@@ -112,6 +137,7 @@ export async function listDiagrams(
   settings: GithubSettings,
 ): Promise<GithubContentItem[]> {
   const { owner, name } = requireRepo(settings)
+  requireToken(settings)
   const folder = normalizeFolder(DEFAULT_FOLDER)
   // Cache-bust query so intermediaries cannot reuse a pre-delete directory listing.
   const bust = `_=${Date.now()}`
@@ -218,6 +244,5 @@ export async function deleteFile(
   })
   if (!res.ok) await parseError(res)
 }
-
 
 export { useProxy }

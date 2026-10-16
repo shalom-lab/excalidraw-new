@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { deleteFile, listDiagrams } from '../github/client'
+import { isConfigured } from '../github/storage'
 import {
   DEFAULT_BRANCH,
   DEFAULT_FOLDER,
@@ -32,6 +33,12 @@ export function OpenModal({ open, settings, onClose, onOpen }: Props) {
     if (!opts?.quiet) setBusy(true)
     setErr(null)
     try {
+      if (!isConfigured(settings)) {
+        if (gen !== loadGen.current) return
+        setErr('未配置 GitHub：请先在设置中填写有效的 PAT 与 owner/repo。')
+        setItems([])
+        return
+      }
       const list = await listDiagrams(settings)
       if (gen !== loadGen.current) return
       // Drop paths we already deleted so a briefly stale Contents listing
@@ -47,6 +54,8 @@ export function OpenModal({ open, settings, onClose, onOpen }: Props) {
     } catch (e) {
       if (gen !== loadGen.current) return
       setErr(friendlyGithubError(e))
+      // Keep prior items on quiet refresh failure; otherwise clear so we never
+      // pair an error banner with the "还没有图表文件" empty-state copy.
       if (!opts?.quiet) setItems([])
     } finally {
       if (gen === loadGen.current && !opts?.quiet) setBusy(false)
@@ -126,6 +135,8 @@ export function OpenModal({ open, settings, onClose, onOpen }: Props) {
 
         {busy ? (
           <p className="muted">加载中…</p>
+        ) : err ? (
+          <p className="muted">列表加载失败，请根据上方错误排查后点「刷新」重试。</p>
         ) : items.length === 0 ? (
           <p className="muted">该目录下还没有图表文件。保存一张新图即可创建。</p>
         ) : (
