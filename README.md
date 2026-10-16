@@ -89,9 +89,11 @@ your-repo/
 
 默认 **浏览器直连** `https://api.github.com`（GitHub 支持 CORS + `Authorization`）。
 
-若遇网络/CORS 问题，开发服务器已带最小代理：
+请求头必须落在 GitHub 的 `Access-Control-Allow-Headers` 内（含 `Authorization`、`X-GitHub-Api-Version` 等）。**不要**自设 `Cache-Control` 等未允许的头——浏览器会在 CORS 预检阶段失败并表现为 `Failed to fetch`（应用内「网络/CORS 失败」），与 401/403/限流无关。防缓存用 `fetch(..., { cache: 'no-store' })` 与查询参数 `_=`。
 
-- 前端自动回退到 `/api/github/*`
+若遇网络/CORS 问题，**仅开发服务器**有最小代理回退：
+
+- `import.meta.env.DEV` 下直连失败时回退 `/api/github/*`（生产 GitHub Pages 无此代理，避免永久切到 404 路径）
 - Vite 代理见 `vite.config.ts` → `https://api.github.com`
 - 官方库 CDN：`/api/libraries/*` → `libraries.excalidraw.com`；`/api/github-raw/*` → `raw.githubusercontent.com`（仅开发服务器；生产环境 CDN 已返回 `Access-Control-Allow-Origin: *`）
 

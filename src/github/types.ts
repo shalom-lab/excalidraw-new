@@ -79,6 +79,13 @@ function isNetworkFetchError(err: unknown): boolean {
   )
 }
 
+const NETWORK_FAIL_HINT =
+  '网络/CORS 失败：浏览器未能从 GitHub API 收到 HTTP 响应' +
+  '（常见：断网、跨域预检被拒、广告拦截扩展、或无法访问 api.github.com）。' +
+  '这不是额度用尽——若请求到达 API，限流会显示为「API 限流 (403)」，' +
+  '鉴权失败会显示 401/403 权限文案。请检查网络与扩展后重试；' +
+  '并确认设置里已填写有效的 PAT 与 owner/repo。'
+
 export function friendlyGithubError(err: unknown): string {
   if (err instanceof GithubApiError) {
     const msg = err.message || ''
@@ -86,12 +93,9 @@ export function friendlyGithubError(err: unknown): string {
       /sha/i.test(msg) ||
       /wasn't supplied/i.test(msg) ||
       /does not match/i.test(msg)
-    // status 0 = browser network / CORS (no HTTP response)
-    if (err.status === 0 || isNetworkFetchError(err)) {
-      return (
-        '网络请求失败：无法连接 GitHub API（可能是网络中断、CORS 被拦、' +
-        '或浏览器扩展拦截）。请检查网络后重试；并确认设置里已填写有效的 PAT 与仓库。'
-      )
+    // status 0 = no HTTP response (network / CORS). Never conflate with 401/403/rate limit.
+    if (err.status === 0) {
+      return NETWORK_FAIL_HINT
     }
     switch (err.status) {
       case 401:
@@ -126,10 +130,7 @@ export function friendlyGithubError(err: unknown): string {
     }
   }
   if (isNetworkFetchError(err)) {
-    return (
-      '网络请求失败：无法连接 GitHub API（可能是网络中断、CORS 被拦、' +
-      '或浏览器扩展拦截）。请检查网络后重试；并确认设置里已填写有效的 PAT 与仓库。'
-    )
+    return NETWORK_FAIL_HINT
   }
   if (err instanceof Error) return err.message
   return String(err)

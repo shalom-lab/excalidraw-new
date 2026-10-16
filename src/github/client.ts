@@ -49,12 +49,13 @@ async function githubFetch(
   const token = requireToken(settings)
   const url = `${baseUrl()}${path}`
   const headers = new Headers(init.headers)
+  // Only set headers GitHub lists in Access-Control-Allow-Headers.
+  // Cache-Control is NOT allowed — browsers fail the CORS preflight with
+  // TypeError "Failed to fetch" (status 0), which we used to mislabel as a
+  // generic network outage. Bust cache via fetch cache:'no-store' + query `_=`.
   headers.set('Accept', 'application/vnd.github+json')
   headers.set('Authorization', `Bearer ${token}`)
   headers.set('X-GitHub-Api-Version', '2022-11-28')
-  // Avoid stale Contents listings after mutate (delete/save): browser may
-  // otherwise reuse a cached GET and the Open modal keeps showing deleted files.
-  headers.set('Cache-Control', 'no-cache')
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
