@@ -12,6 +12,7 @@ import {
   parseRepo,
   type GithubSettings,
 } from '../github/types'
+import { ConfirmDialog } from './ConfirmDialog'
 
 interface Props {
   open: boolean
@@ -26,6 +27,7 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
   const [saved, setSaved] = useState<GithubSettings>(initial)
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -35,6 +37,7 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
       setTokenInput('')
       setMsg(null)
       setErr(null)
+      setClearConfirmOpen(false)
     }
   }, [open, initial])
 
@@ -79,8 +82,8 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
     setErr(null)
   }
 
-  const handleClear = () => {
-    if (!confirm('确定清除本地 PAT 与仓库设置？')) return
+  const doClear = () => {
+    setClearConfirmOpen(false)
     clearSettings()
     const empty = { ...DEFAULT_SETTINGS }
     setSaved(empty)
@@ -143,7 +146,11 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
         {err && <div className="banner error">{err}</div>}
 
         <footer className="modal-footer">
-          <button type="button" className="btn danger" onClick={handleClear}>
+          <button
+            type="button"
+            className="btn danger"
+            onClick={() => setClearConfirmOpen(true)}
+          >
             清除
           </button>
           <div className="spacer" />
@@ -152,6 +159,17 @@ export function SettingsModal({ open, initial, onClose, onSaved }: Props) {
           </button>
         </footer>
       </div>
+
+      <ConfirmDialog
+        open={clearConfirmOpen}
+        title="确认清除"
+        danger
+        confirmLabel="清除"
+        onCancel={() => setClearConfirmOpen(false)}
+        onConfirm={doClear}
+      >
+        <p>确定清除本地 PAT 与仓库设置？此操作不会影响 GitHub 上的文件。</p>
+      </ConfirmDialog>
     </div>
   )
 }

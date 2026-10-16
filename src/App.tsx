@@ -6,6 +6,7 @@ import type {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import '@excalidraw/excalidraw/index.css'
 
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { ImportLibraryModal } from './components/ImportLibraryModal'
 import { OpenModal } from './components/OpenModal'
 import { SaveModal } from './components/SaveModal'
@@ -77,6 +78,7 @@ export default function App() {
   const [openOpen, setOpenOpen] = useState(false)
   const [saveAsOpen, setSaveAsOpen] = useState(false)
   const [importLibOpen, setImportLibOpen] = useState(false)
+  const [newConfirmOpen, setNewConfirmOpen] = useState(false)
 
   const [currentPath, setCurrentPath] = useState<string | null>(null)
   const [currentSha, setCurrentSha] = useState<string | null>(null)
@@ -267,18 +269,22 @@ export default function App() {
     [],
   )
 
-  const handleNew = () => {
-    if (
-      currentPath &&
-      !confirm('新建将清空当前画布（未保存的修改会丢失）。继续？')
-    ) {
-      return
-    }
+  const doNewCanvas = () => {
+    setNewConfirmOpen(false)
     clearLocalDraft()
     applyScene(emptyDoc(), null, null)
     setCurrentName('untitled')
     setError(null)
     showToast('已新建空白画布')
+  }
+
+  const handleNew = () => {
+    // Confirm only when a GitHub file is open — use in-app dialog, never window.confirm
+    if (currentPath) {
+      setNewConfirmOpen(true)
+      return
+    }
+    doNewCanvas()
   }
 
   const handleOpenItem = async (item: GithubContentItem) => {
@@ -576,6 +582,25 @@ export default function App() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={newConfirmOpen}
+        title="确认新建"
+        danger
+        confirmLabel="新建"
+        onCancel={() => setNewConfirmOpen(false)}
+        onConfirm={doNewCanvas}
+      >
+        <p>
+          新建将清空当前画布（未保存的修改会丢失）。
+          {currentPath ? (
+            <>
+              <br />
+              当前文件：<code>{currentPath}</code>
+            </>
+          ) : null}
+        </p>
+      </ConfirmDialog>
 
       <SettingsModal
         open={settingsOpen}
