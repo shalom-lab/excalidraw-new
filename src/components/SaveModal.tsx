@@ -28,7 +28,7 @@ export function SaveModal({ open, defaultName, folder, onClose, onSave }: Props)
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal narrow" onClick={(e) => e.stopPropagation()}>
         <header className="modal-header">
-          <h2>保存到 GitHub</h2>
+          <h2>保存到云端</h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭">
             ×
           </button>

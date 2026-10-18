@@ -64,9 +64,11 @@ npm run preview
 
 ## 功能
 
+- **顶栏**：右侧操作为 icon-only，`title` / `aria-label` 显示完整含义
 - **新建**：本地空白画布，无需 GitHub
 - **打开**：列出 `diagrams/` 下的 `.excalidraw.json` / `.excalidraw` / `.json`，读取 Contents API
-- **保存 / 另存为**：`PUT` Contents API（有 `sha` 则更新，否则创建；另存为若文件已存在会自动带 `sha` 覆盖）
+- **保存 / 保存到云端**：`PUT` Contents API（有 `sha` 则更新，否则创建；「保存到云端」若文件已存在会自动带 `sha` 覆盖）
+- **导入文件**：从本机选择 `.excalidraw` / `.excalidraw.json` / 含 `elements` 的 JSON，在画布打开并可本地编辑；再保存到云端仍走 GitHub
 - **删除**：在打开列表里删除仓库中的文件
 - **导入官方库**：从 [libraries.excalidraw.com](https://libraries.excalidraw.com) 一键安装（见下），无需先下载 `.excalidrawlib`，也**不需要** GitHub Token
 - **错误提示**：401 / 403（权限 vs 限流）/ 404 / 409 / 422 / 网络·CORS（Failed to fetch）中文说明；打开列表时「真无文件」与「请求失败」分开显示，不会叠在一起
@@ -102,11 +104,11 @@ your-repo/
 ```text
 excalidraw-byok/
 ├── src/
-│   ├── App.tsx                 # 画布 + 工具栏 + 打开/保存 + 官方库导入
+│   ├── App.tsx                 # 画布 + 图标工具栏 + 打开/保存/导入文件 + 官方库导入
 │   ├── components/
 │   │   ├── SettingsModal.tsx   # BYOK 设置（token + owner/repo）
 │   │   ├── OpenModal.tsx       # 列出/打开/删除
-│   │   ├── SaveModal.tsx       # 另存为文件名
+│   │   ├── SaveModal.tsx       # 保存到云端（文件名）
 │   │   └── ImportLibraryModal.tsx  # 打开官方库 / 粘贴 URL 安装
 │   ├── draft/
 │   │   └── storage.ts          # 本地自动草稿（localStorage / IndexedDB）

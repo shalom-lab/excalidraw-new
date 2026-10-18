@@ -12,6 +12,15 @@ import { OpenModal } from './components/OpenModal'
 import { SaveModal } from './components/SaveModal'
 import { SettingsModal } from './components/SettingsModal'
 import {
+  IconCloudSave,
+  IconImportFile,
+  IconLibrary,
+  IconNew,
+  IconOpen,
+  IconSave,
+  IconSettings,
+} from './components/ToolbarIcons'
+import {
   clearDraft,
   draftHasContent,
   loadDraft,
@@ -69,6 +78,51 @@ function stripAppState(appState: Record<string, unknown> | undefined) {
   return rest
 }
 
+
+/** Parse a local Excalidraw export / GitHub diagram JSON into DiagramDoc. */
+function parseDiagramJson(text: string): DiagramDoc {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new Error('无法解析 JSON：文件内容不是合法 JSON')
+  }
+  if (Array.isArray(parsed)) {
+    return {
+      type: 'excalidraw',
+      version: 2,
+      source: 'excalidraw-byok',
+      elements: parsed,
+      appState: { viewBackgroundColor: '#ffffff' },
+      files: {},
+    }
+  }
+  if (
+    parsed &&
+    typeof parsed === 'object' &&
+    Array.isArray((parsed as DiagramDoc).elements)
+  ) {
+    const doc = parsed as DiagramDoc
+    return {
+      type: 'excalidraw',
+      version: doc.version ?? 2,
+      source: doc.source ?? 'excalidraw-byok',
+      elements: doc.elements ?? [],
+      appState: doc.appState ?? { viewBackgroundColor: '#ffffff' },
+      files: doc.files ?? {},
+    }
+  }
+  throw new Error('文件不是有效的 Excalidraw 绘图（缺少 elements）')
+}
+
+function nameFromImportFile(filename: string): string {
+  return filename
+    .replace(/\.excalidraw\.json$/i, '')
+    .replace(/\.excalidraw$/i, '')
+    .replace(/\.json$/i, '')
+    .trim() || 'untitled'
+}
+
 export default function App() {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
   const [excalidrawAPI, setExcalidrawAPI] =
@@ -89,6 +143,7 @@ export default function App() {
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const titleInputRef = useRef<HTMLInputElement | null>(null)
+  const importFileRef = useRef<HTMLInputElement | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const metaRef = useRef({
@@ -293,8 +348,7 @@ export default function App() {
     setOpenOpen(false)
     try {
       const { sha, text } = await getFile(settings, item.path)
-      const doc = JSON.parse(text) as DiagramDoc
-      if (!doc.elements) throw new Error('文件不是有效的 Excalidraw JSON')
+      const doc = parseDiagramJson(text)
       // Opening a GitHub file replaces the canvas; drop the previous local draft.
       clearLocalDraft()
       applyScene(doc, item.path, sha)
@@ -304,6 +358,36 @@ export default function App() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const handleImportFile = (file: File | null) => {
+    if (!file) return
+    setBusy(true)
+    setError(null)
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const text = typeof reader.result === 'string' ? reader.result : ''
+        const doc = parseDiagramJson(text)
+        // Local import: editable on canvas; not linked to a GitHub path until save.
+        clearLocalDraft()
+        applyScene(doc, null, null)
+        setCurrentName(nameFromImportFile(file.name))
+        showToast(`已导入 ${file.name}（本地可编辑，保存到云端走 GitHub）`)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        setError(`导入失败：${msg}`)
+      } finally {
+        setBusy(false)
+        if (importFileRef.current) importFileRef.current.value = ''
+      }
+    }
+    reader.onerror = () => {
+      setError('导入失败：无法读取文件')
+      setBusy(false)
+      if (importFileRef.current) importFileRef.current.value = ''
+    }
+    reader.readAsText(file)
   }
 
   const doSave = async (filenameOrPath: string, isSaveAs: boolean) => {
@@ -479,12 +563,31 @@ export default function App() {
           )}
         </div>
         <div className="actions">
-          <button type="button" className="btn" onClick={handleNew} disabled={busy}>
-            新建
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".excalidraw,.excalidraw.json,.json,application/json"
+            className="sr-only"
+            aria-hidden="true"
+            tabIndex={-1}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null
+              handleImportFile(file)
+            }}
+          />
+          <button
+            type="button"
+            className="btn icon-only"
+            onClick={handleNew}
+            disabled={busy}
+            title="新建"
+            aria-label="新建"
+          >
+            <IconNew />
           </button>
           <button
             type="button"
-            className="btn"
+            className="btn icon-only"
             disabled={busy}
             onClick={() => {
               if (!configured) {
@@ -495,20 +598,33 @@ export default function App() {
               setOpenOpen(true)
             }}
             title={configured ? '从 GitHub 打开' : '请先配置 GitHub'}
+            aria-label={configured ? '从 GitHub 打开' : '请先配置 GitHub'}
           >
-            打开
+            <IconOpen />
           </button>
           <button
             type="button"
-            className="btn primary"
+            className="btn icon-only"
+            disabled={busy}
+            onClick={() => importFileRef.current?.click()}
+            title="导入文件（.excalidraw / .excalidraw.json / JSON）"
+            aria-label="导入文件"
+          >
+            <IconImportFile />
+          </button>
+          <button
+            type="button"
+            className="btn primary icon-only"
             disabled={busy}
             onClick={handleSave}
+            title={busy ? '处理中…' : '保存'}
+            aria-label={busy ? '处理中' : '保存'}
           >
-            {busy ? '处理中…' : '保存'}
+            <IconSave />
           </button>
           <button
             type="button"
-            className="btn"
+            className="btn icon-only"
             disabled={busy}
             onClick={() => {
               if (!configured) {
@@ -518,25 +634,29 @@ export default function App() {
               }
               setSaveAsOpen(true)
             }}
+            title="保存到云端"
+            aria-label="保存到云端"
           >
-            另存为
+            <IconCloudSave />
           </button>
           <button
             type="button"
-            className="btn"
+            className="btn icon-only"
             disabled={busy}
             onClick={() => setImportLibOpen(true)}
-            title="从 libraries.excalidraw.com 一键导入，或粘贴 .excalidrawlib URL"
+            title="导入官方库：从 libraries.excalidraw.com 一键导入，或粘贴 .excalidrawlib URL"
+            aria-label="导入官方库"
           >
-            导入官方库
+            <IconLibrary />
           </button>
           <button
             type="button"
-            className="btn"
+            className="btn icon-only"
             onClick={() => setSettingsOpen(true)}
-            title={configured ? '已保存' : '未设置'}
+            title={configured ? '设置（已保存）' : '设置（未设置）'}
+            aria-label={configured ? '设置（已保存）' : '设置（未设置）'}
           >
-            设置 · {configured ? '已保存' : '未设置'}
+            <IconSettings />
           </button>
         </div>
       </header>
